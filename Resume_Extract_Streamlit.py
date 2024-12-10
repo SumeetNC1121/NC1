@@ -1,20 +1,21 @@
-import os
 import re
 import PyPDF2
 import pandas as pd
 import streamlit as st
+from io import BytesIO
+
 
 # Function to extract text from a PDF file
-def extract_text_from_pdf(file_path):
+def extract_text_from_pdf(file):
     text = ""
     try:
-        with open(file_path, 'rb') as pdf_file:
-            reader = PyPDF2.PdfReader(pdf_file)
-            for page in reader.pages:
-                text += page.extract_text()
+        reader = PyPDF2.PdfReader(file)
+        for page in reader.pages:
+            text += page.extract_text()
     except Exception as e:
-        st.error(f"Error reading {file_path}: {e}")
+        st.error(f"Error reading file: {e}")
     return text
+
 
 # Function to extract name, phone, and email from text
 def extract_name_and_phone(text):
@@ -38,36 +39,36 @@ def extract_name_and_phone(text):
 
     return name, phone, email
 
-# Function to process resumes and save results to an Excel file
-def process_resumes(folder_path, output_excel):
-    data = []
-    for filename in os.listdir(folder_path):
-        if filename.endswith(".pdf"):
-            file_path = os.path.join(folder_path, filename)
-            text = extract_text_from_pdf(file_path)
-            name, phone, email = extract_name_and_phone(text)
-            data.append({"File Name": filename, "Name": name, "Phone": phone, "Email": email})
-
-    # Save results to an Excel file
-    df = pd.DataFrame(data)
-    df.to_excel(output_excel, index=False)
-    return output_excel
 
 # Streamlit app setup
 st.title("Resume Processing App")
-st.write("Extract Name, Phone, and Email from PDF resumes.")
+st.write("Upload PDF resumes to extract Name, Phone, and Email.")
 
-# User input for folder path
-folder_path = st.text_input("Enter the folder path containing PDF resumes:")
-excel_name = "extracted_data.xlsx"
+# File uploader to allow multiple files
+uploaded_files = st.file_uploader("Upload PDF files", type="pdf", accept_multiple_files=True)
 
-if st.button("Process Resumes"):
-    if os.path.isdir(folder_path):
-        output_excel = os.path.join(folder_path, excel_name)
-        try:
-            process_resumes(folder_path, output_excel)
-            st.success(f"All PDFs have been read. Results are stored in folder - {folder_path} . Excel file - `{excel_name}`.")
-        except Exception as e:
-            st.error(f"An error occurred: {e}")
-    else:
-        st.error("The entered folder path is invalid. Please enter a valid path.")
+if uploaded_files:
+    # Process uploaded files
+    data = []
+    for uploaded_file in uploaded_files:
+        file_name = uploaded_file.name
+        text = extract_text_from_pdf(uploaded_file)
+        name, phone, email = extract_name_and_phone(text)
+        data.append({"File Name": file_name, "Name": name, "Phone": phone, "Email": email})
+
+    # Convert data to DataFrame
+    df = pd.DataFrame(data)
+
+    # Save results to Excel
+    output_excel = "extracted_data.xlsx"
+    df.to_excel(output_excel, index=False)
+
+    # Display results and provide download link
+    st.write("Processing complete! Below is the extracted details:")
+    st.dataframe(df)
+    st.download_button(
+        label="Download Results as Excel",
+        data=open(output_excel, "rb").read(),
+        file_name="Resume_extracted_data.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
